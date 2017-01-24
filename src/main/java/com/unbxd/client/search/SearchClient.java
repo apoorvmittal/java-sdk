@@ -2,6 +2,7 @@ package com.unbxd.client.search;
 
 import com.unbxd.client.ConnectionManager;
 import com.unbxd.client.HttpClientManager;
+import com.unbxd.client.autosuggest.exceptions.AutoSuggestException;
 import com.unbxd.client.search.exceptions.SearchException;
 import com.unbxd.client.search.response.SearchResponse;
 import org.apache.commons.lang.StringUtils;
@@ -14,6 +15,8 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.log4j.Logger;
+import org.codehaus.jackson.JsonParseException;
+import org.codehaus.jackson.map.JsonMappingException;
 import org.codehaus.jackson.map.ObjectMapper;
 
 import java.io.*;
@@ -140,7 +143,7 @@ public class SearchClient {
      */
     public SearchClient addTextFilter(String fieldName, String... values){
         if (this.textFilters == null) {
-            this.textFilters = new HashMap<>();
+            this.textFilters = new HashMap<String, List<String>>();
         }
 
         if(textFilters.containsKey(fieldName)) {
@@ -155,7 +158,7 @@ public class SearchClient {
 
     public SearchClient addRangeFilter(String fieldName, String start, String end){
         if (this.rangeFilters == null) {
-            this.rangeFilters = new HashMap<>();
+            this.rangeFilters = new HashMap<String, List<String>>();
         }
 
         if(rangeFilters.containsKey(fieldName)){
@@ -175,7 +178,7 @@ public class SearchClient {
 
     public SearchClient addOtherParams(String Otherkey, String Othervalue){
         if (this.extraParams == null) {
-            this.extraParams = new HashMap<>();
+            this.extraParams = new HashMap<String, String>();
         }
 
         this.extraParams.put(Otherkey, Othervalue);
@@ -190,7 +193,7 @@ public class SearchClient {
      */
     public SearchClient addSort(String field, SortDir sortDir){
         if (this.sorts == null) {
-            this.sorts = new LinkedHashMap<>();
+            this.sorts = new LinkedHashMap<String, SortDir>();
         }
 
         this.sorts.put(field, sortDir);
@@ -204,7 +207,7 @@ public class SearchClient {
      */
     public SearchClient addSort(String field){
         if (this.sorts == null) {
-            this.sorts = new LinkedHashMap<>();
+            this.sorts = new LinkedHashMap<String, SortDir>();
         }
 
         this.addSort(field, SortDir.DESC);
@@ -237,7 +240,7 @@ public class SearchClient {
      */
     public SearchClient setMultiParams(String key, List<String> values) {
         if (this.multiQueryParams == null) {
-            this.multiQueryParams = new HashMap<>();
+            this.multiQueryParams = new HashMap<String, List<String>>();
         }
 
         if(multiQueryParams.containsKey(key)) {
@@ -327,10 +330,11 @@ public class SearchClient {
      * @throws SearchException
      */
     public SearchResponse execute() throws SearchException {
-        String url = this.generateUrl();
-        HttpGet get = new HttpGet(url);
+        try {
+            String url = this.generateUrl();
+            HttpGet get = new HttpGet(url);
+            CloseableHttpResponse response = httpClient.execute(get);
 
-        try (CloseableHttpResponse response = httpClient.execute(get)) {
             if(response.getStatusLine().getStatusCode() == 200){
                 Map<String, Object> responseObject = new ObjectMapper().readValue(new InputStreamReader(response.getEntity().getContent()), Map.class);
                 return new SearchResponse(responseObject);
@@ -347,7 +351,16 @@ public class SearchClient {
                 LOG.error(responseText);
                 throw new SearchException(responseText);
             }
-        } catch (Exception e) {
+        } catch (JsonParseException e) {
+            LOG.error(e.getMessage(), e);
+            throw new SearchException(e);
+        } catch (JsonMappingException e) {
+            LOG.error(e.getMessage(), e);
+            throw new SearchException(e);
+        } catch (ClientProtocolException e) {
+            LOG.error(e.getMessage(), e);
+            throw new SearchException(e);
+        } catch (IOException e) {
             LOG.error(e.getMessage(), e);
             throw new SearchException(e);
         }
